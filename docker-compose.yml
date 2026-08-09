@@ -1,0 +1,36 @@
+# Convenience wrapper around the Dockerfile.
+#
+#   docker compose up --build          serve the API on :8000
+#   docker compose run --rm train      train the model into ./models
+#
+# data/ and models/ are bind-mounted so neither the dataset nor the model
+# artifact ends up inside the image.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # One-shot: trains and writes models/, then exits.
+  train:
+    build: .
+    volumes:
+      - ./data:/app/data:ro
+      - ./models:/app/models
+    environment:
+      - PYTHONPATH=/app
+    command: python -m src.train
+    profiles: ["tools"]

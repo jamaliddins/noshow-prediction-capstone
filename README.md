@@ -65,10 +65,63 @@ python -m src.visualize           # EDA figures        -> reports/figures/
 python -m src.train               # train, log to MLflow, save model
 python -m src.evaluation_plots    # result figures     -> reports/figures/
 python -m src.predict             # inference demo
-pytest                            # 41 tests
+pytest                            # 63 tests
 ```
 
 View experiments: `mlflow ui --backend-store-uri sqlite:///mlflow.db`
+
+## API
+
+```bash
+uvicorn src.api:app --reload      # interactive docs at http://localhost:8000/docs
+```
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/health` | Liveness, and whether the model is loaded |
+| GET | `/model` | Model name, test metrics, thresholds in use |
+| POST | `/predict` | Score one appointment |
+| POST | `/predict/batch` | Score up to 1000, highest risk first |
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"scheduled_day":"2016-05-02T09:00:00","appointment_day":"2016-05-30",
+       "age":22,"gender":"F","neighbourhood":"JARDIM CAMBURI"}'
+```
+
+```json
+{
+  "no_show_probability": 0.4044,
+  "no_show_percentage": 40.4,
+  "risk_tier": "High",
+  "recommendation": "Call to confirm — highest priority for staff follow-up.",
+  "lead_time_days": 28,
+  "threshold_used": 0.2173,
+  "model": "xgboost"
+}
+```
+
+Invalid input returns **422** with a specific message — missing fields, an
+appointment date before the booking date, impossible ages, unknown gender
+values, or `prior_noshows` exceeding `prior_appointments`.
+
+## Docker
+
+```bash
+docker compose up --build                  # API on :8000
+docker compose run --rm train              # train into ./models
+bash scripts/docker_smoke_test.sh          # build + verify endpoints
+```
+
+The image contains code only. `data/` and `models/` are bind-mounted, so neither
+the dataset nor the model artifact is baked in. Runs as a non-root user with a
+healthcheck on `/health`.
+
+> **Note:** the API is verified end to end (live uvicorn server, 22 passing
+> tests). The Docker setup is written and reviewed but **has not been built on
+> this machine** — Docker was not available in the development environment. Run
+> `scripts/docker_smoke_test.sh` to verify it in yours.
 
 ### Demo notebook
 
@@ -87,10 +140,14 @@ src/
   evaluation_plots.py   # post-training result figures
   predict.py            # inference: probability + risk tier
   visualize.py          # pre-modelling EDA figures
-tests/                  # 41 tests, focused on the leakage guarantees
+  api.py                # FastAPI service
+tests/                  # 63 tests, focused on the leakage guarantees
 notebooks/demo.ipynb    # Colab-runnable demo
 reports/figures/        # 13 figures
 models/                 # saved artifacts (not committed)
+scripts/                # Docker smoke test
+Dockerfile              # API image (code only; data/models mounted)
+docker-compose.yml      # serve, or run a one-shot training job
 ```
 
 ## Methodology
