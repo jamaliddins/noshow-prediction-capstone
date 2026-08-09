@@ -1,0 +1,13 @@
+# Shell scripts and Docker files must keep LF endings — CRLF breaks them
+# inside Linux containers ("bad interpreter: no such file or directory").
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Notebooks are JSON; keep them normalized.
+*.ipynb text eol=lf
+
+*.png binary
+*.docx binary
+*.joblib binary
