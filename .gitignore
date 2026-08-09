@@ -1,0 +1,29 @@
+# Data
+data/
+*.csv
+
+# Model artifacts
+*.pkl
+*.joblib
+models/*.joblib
+models/*.pkl
+
+# Env / secrets
+.env
+*.env
+
+# MLflow
+mlruns/
+mlflow.db
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
