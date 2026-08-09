@@ -1,0 +1,70 @@
+{
+  "model_name": "xgboost",
+  "calibration": "isotonic",
+  "threshold": 0.21726058562047518,
+  "features": {
+    "numeric": [
+      "age",
+      "lead_time_days",
+      "is_same_day",
+      "appt_dayofweek",
+      "appt_month",
+      "sched_dayofweek",
+      "sched_hour",
+      "is_female",
+      "scholarship",
+      "hypertension",
+      "diabetes",
+      "alcoholism",
+      "handicap",
+      "has_handicap",
+      "n_conditions",
+      "sms_received",
+      "prior_appointments",
+      "prior_noshows",
+      "prior_noshow_rate",
+      "is_first_appointment",
+      "days_since_last_appointment"
+    ],
+    "categorical": [
+      "neighbourhood",
+      "age_group"
+    ]
+  },
+  "validation_metrics": {
+    "threshold": 0.21726058562047518,
+    "f1": 0.4581933557297499,
+    "precision": 0.3354741732713856,
+    "recall": 0.7224838140082401,
+    "pr_auc": 0.4089990337296108,
+    "roc_auc": 0.7480759287715412,
+    "balanced_accuracy": 0.6799219964895786,
+    "brier": 0.13978148034823576,
+    "accuracy": 0.654569252736792,
+    "tn": 8547,
+    "fp": 4863,
+    "fn": 943,
+    "tp": 2455
+  },
+  "test_metrics": {
+    "threshold": 0.21726058562047518,
+    "f1": 0.4593693436219872,
+    "precision": 0.3380538418395962,
+    "recall": 0.7164933135215453,
+    "pr_auc": 0.4109405763137195,
+    "roc_auc": 0.7544384377104199,
+    "balanced_accuracy": 0.6819057035260498,
+    "brier": 0.13895136386425064,
+    "accuracy": 0.6612142558653215,
+    "tn": 8665,
+    "fp": 4721,
+    "fn": 954,
+    "tp": 2411
+  },
+  "train_rows": 76957,
+  "random_state": 42,
+  "risk_tiers": {
+    "low_max": 0.25674688816070557,
+    "medium_max": 0.34659093618392944
+  }
+}
