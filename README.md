@@ -1,5 +1,9 @@
 # No-Show Prediction — MED-01 Capstone
 
+**Author:** Jamoliddin Solikhov
+**Track:** MED-01 — Healthcare / Medical
+**ML task:** Binary classification (supervised), on imbalanced tabular data
+
 Predicts whether a patient will miss a scheduled medical appointment, using the
 Kaggle ["Medical Appointment No Shows"](https://www.kaggle.com/datasets/joniarroba/noshowappointments)
 dataset (110,527 appointments, 62,299 patients, public clinics in Vitória, Espírito
@@ -129,6 +133,58 @@ healthcheck on `/health`.
 Google Colab runtime — it clones this repo, fetches the dataset, trains the model
 and demonstrates inference. Verified end to end: 18 code cells, zero errors.
 
+## Pipeline / architecture
+
+```
+data/KaggleV2-May-2016.csv          raw Kaggle export (not committed)
+        │
+        ▼
+src/preprocessing.py                clean 11 bad rows · engineer 23 features
+        │                           patient-grouped 70/15/15 split
+        │                           history features from strictly prior rows
+        ▼
+src/train.py                        ColumnTransformer (scale + one-hot)
+        │                           4 models compared · isotonic calibration
+        │                           every run logged to MLflow
+        ▼
+models/*.joblib                     calibrated pipeline + threshold + tiers
+        │
+        ├──► src/evaluate.py + evaluation_plots.py   metrics · 13 figures
+        ├──► src/predict.py                          probability + risk tier
+        └──► src/api.py                              FastAPI /predict endpoints
+```
+
+Preprocessing, training and inference all share one `Pipeline` object, so the
+transformations applied at inference are exactly those fitted during training.
+
+## Example input / output
+
+**Input** — only fields knowable *before* the appointment:
+
+```json
+{
+  "scheduled_day": "2016-05-02T09:00:00",
+  "appointment_day": "2016-05-30",
+  "age": 22,
+  "gender": "F",
+  "neighbourhood": "JARDIM CAMBURI"
+}
+```
+
+**Output** — a calibrated probability, a tier, and the action to take:
+
+```json
+{
+  "no_show_probability": 0.4044,
+  "no_show_percentage": 40.4,
+  "risk_tier": "High",
+  "recommendation": "Call to confirm — highest priority for staff follow-up.",
+  "lead_time_days": 28,
+  "threshold_used": 0.2173,
+  "model": "xgboost"
+}
+```
+
 ## Project structure
 
 ```
@@ -196,7 +252,11 @@ discard ~38,000 valid same-day rows.
 - **Prior behaviour predicts future behaviour.** Patients who never missed before
   are at 15%; those who missed over half their prior appointments, 34%.
 
-## Limitations
+## Responsible AI
+
+This model predicts human behaviour from administrative records about patients,
+in a healthcare setting. The limitations below are therefore part of the
+deliverable, not a footnote to it.
 
 1. **One city, one year** (Vitória, 2016). Generalization elsewhere is untested.
 2. **Modest discrimination** — F1 0.459, ROC-AUC 0.754. Useful for ranking, not
