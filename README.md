@@ -252,6 +252,55 @@ discard ~38,000 valid same-day rows.
 - **Prior behaviour predicts future behaviour.** Patients who never missed before
   are at 15%; those who missed over half their prior appointments, 34%.
 
+## Error analysis
+
+`python -m src.error_analysis` → [`reports/figures/14_error_analysis.png`](reports/figures/14_error_analysis.png)
+
+Aggregate F1 hides *which* appointments the model gets wrong. Slicing the 16,751
+test appointments by error type gives four findings:
+
+**1. Same-day appointments are the blind spot.** Recall collapses to 18.4% there
+against 88.4% at 31+ days:
+
+| Lead time | n | Actual rate | Recall | Precision |
+|---|---|---|---|---|
+| Same day | 5,950 | 4.7% | **18.4%** | 38.8% |
+| 1–3 | 2,112 | 23.5% | 50.6% | 27.5% |
+| 4–7 | 2,606 | 25.9% | 65.8% | 31.9% |
+| 8–14 | 1,800 | 30.3% | 84.0% | 34.6% |
+| 15–30 | 2,667 | 31.8% | 88.1% | 35.1% |
+| 31+ | 1,616 | 32.1% | **88.4%** | 37.0% |
+
+This is the model behaving correctly, not a bug: same-day appointments genuinely
+miss only 4.7% of the time, so the calibrated probability rarely clears the
+threshold. It matters operationally because same-day bookings are 36% of all
+appointments — the call list will systematically under-cover them.
+
+**2. Most errors are borderline, not confident blunders.** 61.8% of false
+negatives fall within 0.05 of the 0.217 threshold. The model is uncertain where
+it is wrong, which is the desired failure mode — it is not confidently wrong.
+
+**3. Errors track the base rate by age.** Recall is 32.8% for seniors (14.5%
+actual no-show rate) and 89.1% for teens (26.2%). The model is weakest exactly
+where no-shows are rarest, which follows from a single global threshold.
+
+**4. Fairness — the welfare subgroup is flagged more often.** This is the finding
+that most constrains deployment:
+
+| Group | n | Actual rate | Flagged | Recall | Precision |
+|---|---|---|---|---|---|
+| No welfare | 15,080 | 19.6% | 41.2% | 69.9% | 33.4% |
+| Scholarship (welfare) | 1,671 | 24.1% | **55.2%** | 84.3% | 36.8% |
+
+Welfare recipients are flagged at 55.2% versus 41.2% — a **14-point gap**.
+Precision is comparable across groups (36.8% vs 33.4%), so the model is not
+*less accurate* for this group; it flags them more because they genuinely miss
+more (24.1% vs 19.6%). The disparity is in exposure, not in error rate.
+
+Since the intervention is a reminder phone call, higher exposure is defensible
+and arguably beneficial. It would **not** be defensible for any rationing,
+penalty, or deprioritisation use — see Responsible AI below.
+
 ## Responsible AI
 
 This model predicts human behaviour from administrative records about patients,
