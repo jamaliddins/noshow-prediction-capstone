@@ -333,3 +333,46 @@ loop — never an automated clinical or administrative decision.
 
 Fixed `random_state=42` throughout. Python 3.10+. All scripts run top-to-bottom
 on a fresh runtime, and the demo notebook is verified against a clean Colab.
+
+## License and acknowledgements
+
+### Dataset
+
+**"Medical Appointment No Shows"** by **JoniHoppen** ([Aquarela Analytics](http://bit.ly/2Ulwskh)),
+published on Kaggle: https://www.kaggle.com/datasets/joniarroba/noshowappointments
+
+Licensed **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)**
+(Attribution — NonCommercial — ShareAlike). The terms carry three consequences
+for this project:
+
+- **Attribution** — the author is credited here and in the demo notebook.
+- **NonCommercial** — this is coursework. The dataset, and any model trained on
+  it, may not be used commercially. A real clinic deployment would require
+  retraining on data the operator is licensed to use.
+- **ShareAlike** — derivatives of the dataset must carry the same licence.
+
+The data is de-identified: patients appear as numeric ids, with no names,
+addresses or contact details. It is not re-identifiable from the fields provided.
+
+The raw CSV is **not redistributed in this repository** (`.gitignore` excludes
+`data/`). The demo notebook downloads it at run time and verifies the schema and
+row count before use.
+
+### Code
+
+Project code is released under the MIT Licence — see [LICENSE](LICENSE).
+This covers the code only, not the dataset, which remains under CC BY-NC-SA 4.0.
+
+### Libraries
+
+Built with [scikit-learn](https://scikit-learn.org/), [XGBoost](https://xgboost.readthedocs.io/),
+[pandas](https://pandas.pydata.org/), [NumPy](https://numpy.org/),
+[MLflow](https://mlflow.org/), [matplotlib](https://matplotlib.org/),
+[seaborn](https://seaborn.pydata.org/), [FastAPI](https://fastapi.tiangolo.com/)
+and [pytest](https://pytest.org/) — all open source under permissive licences.
+
+### AI assistance
+
+Claude (Anthropic) was used as a coding assistant during implementation. All
+methodology decisions, results and their interpretation are the author's own, and
+every component is understood and defensible as required by the course policy.

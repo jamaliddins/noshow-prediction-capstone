@@ -2,6 +2,12 @@
 data/
 *.csv
 
+# Course material and private notes — never published
+*.pdf
+criteria*
+Criteria*
+MY_NOTES.md
+
 # Model artifacts
 *.pkl
 *.joblib
@@ -28,3 +34,7 @@ venv/
 .DS_Store
 Thumbs.db
 CLAUDE.md
+
+# Submission paperwork — personal, not part of the deliverable
+Submission Template.docx
+Jamoliddin_Solikhov_Capstone_Submission.docx
