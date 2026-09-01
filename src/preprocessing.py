@@ -112,22 +112,63 @@ def add_appointment_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_patient_history_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Per-patient history using strictly prior appointments only.
+    """Per-patient history known at the moment of booking.
 
-    For each row we use that patient's appointments scheduled strictly earlier.
-    Implemented with shifted expanding aggregates over a sorted frame, so the
-    current row's own outcome can never enter its own features.
+    The prediction timestamp is `scheduled_day`: the instant staff would run
+    this model, when the appointment is booked. A previous appointment may
+    therefore only contribute if its *outcome was already observed by then* —
+    that is, its `appointment_day` fell strictly before this row's
+    `scheduled_day`.
+
+    Ordering by booking time alone is not enough. A patient who books two
+    appointments in one visit has a second row whose "prior" appointment has
+    not happened yet; counting its outcome would feed the model the future.
+    Roughly a quarter of all rows are of this shape, so the distinction is
+    material rather than a corner case.
+
+    Implemented as a merge_asof against a per-patient cumulative table keyed on
+    appointment completion date, which is exact and stays O(n log n).
     """
-    df = df.sort_values(["patient_id", "scheduled_day", "appointment_id"]).copy()
-    grp = df.groupby("patient_id", sort=False)
+    original_index = df.index
+    df = df.copy()
 
-    # cumcount is already exclusive of the current row.
-    df["prior_appointments"] = grp.cumcount()
+    # Table of completed appointments: at each appointment_day, how many of
+    # that patient's appointments had finished and how many were missed.
+    completed = (
+        df[["patient_id", "appointment_day", TARGET]]
+        .sort_values(["patient_id", "appointment_day"])
+        .copy()
+    )
+    completed["cum_appointments"] = completed.groupby("patient_id").cumcount() + 1
+    completed["cum_noshows"] = (
+        completed.groupby("patient_id")[TARGET].cumsum()
+    )
+    # Several appointments can share a day; keep the last state of that day.
+    completed = completed.drop_duplicates(
+        subset=["patient_id", "appointment_day"], keep="last"
+    )[["patient_id", "appointment_day", "cum_appointments", "cum_noshows"]]
 
-    prior_noshows = grp[TARGET].apply(
-        lambda s: s.shift(1).expanding().sum()
-    ).reset_index(level=0, drop=True)
-    df["prior_noshows"] = prior_noshows.fillna(0.0)
+    # For every row, look up that patient's state as of the day before booking.
+    left = df[["patient_id", "scheduled_day"]].copy()
+    left["_row"] = np.arange(len(left))
+    left["as_of"] = left["scheduled_day"].dt.normalize()
+    left = left.sort_values("as_of")
+
+    right = completed.sort_values("appointment_day").copy()
+    right["appointment_day"] = right["appointment_day"].dt.normalize()
+
+    merged = pd.merge_asof(
+        left,
+        right,
+        left_on="as_of",
+        right_on="appointment_day",
+        by="patient_id",
+        allow_exact_matches=False,   # same-day outcome is not yet known
+        direction="backward",
+    ).sort_values("_row")
+
+    df["prior_appointments"] = merged["cum_appointments"].fillna(0).to_numpy(dtype=int)
+    df["prior_noshows"] = merged["cum_noshows"].fillna(0).to_numpy(dtype=float)
 
     # Undefined for a first-ever appointment; -1 is a sentinel trees can split on.
     df["prior_noshow_rate"] = np.where(
@@ -138,10 +179,16 @@ def add_patient_history_features(df: pd.DataFrame) -> pd.DataFrame:
     df["prior_noshow_rate"] = df["prior_noshow_rate"].fillna(-1.0)
     df["is_first_appointment"] = (df["prior_appointments"] == 0).astype(int)
 
-    days_since = grp["scheduled_day"].diff().dt.days
-    df["days_since_last_appointment"] = days_since.fillna(-1.0)
+    # Gap to the last *completed* appointment, on the same known-at-booking rule.
+    last_completed = merged["appointment_day"].to_numpy()
+    days_since = (
+        df["scheduled_day"].dt.normalize().to_numpy() - last_completed
+    ) / np.timedelta64(1, "D")
+    df["days_since_last_appointment"] = pd.Series(
+        days_since, index=df.index, dtype="float64"
+    ).fillna(-1.0)
 
-    return df.sort_index()
+    return df.loc[original_index]
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:

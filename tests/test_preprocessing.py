@@ -87,7 +87,67 @@ class TestHistoryFeaturesUseOnlyThePast:
     def test_days_since_last_appointment(self, toy_df):
         out = add_patient_history_features(toy_df).set_index("appointment_id")
         assert out.loc[101, "days_since_last_appointment"] == -1  # no previous
-        assert out.loc[102, "days_since_last_appointment"] == 31  # Jan 1 -> Feb 1
+        # Gap since the last *attended-or-missed* appointment, not the last
+        # booking: at booking time staff know when the patient was last seen.
+        assert out.loc[102, "days_since_last_appointment"] == 22  # Jan 10 -> Feb 1
+
+    def test_history_excludes_appointments_not_yet_completed(self):
+        """A prior appointment counts only once its outcome is observable.
+
+        Booking two appointments in one visit is common in this dataset. The
+        later row must not count the earlier one, whose outcome is still in
+        the future at the moment both are booked.
+        """
+        df = pd.DataFrame([
+            # Both booked Jan 1; the Jan 10 outcome is unknown when Jan 20 is booked.
+            _make_row(7, 701, "2016-01-01", "2016-01-10", 1),
+            _make_row(7, 702, "2016-01-01", "2016-01-20", 0),
+            # Booked Jan 15, by which time only the Jan 10 appointment has happened.
+            _make_row(7, 703, "2016-01-15", "2016-01-25", 0),
+        ])
+        out = add_patient_history_features(df).set_index("appointment_id")
+
+        assert out.loc[701, "prior_appointments"] == 0
+        # Same booking day: the Jan 10 no-show has not occurred yet.
+        assert out.loc[702, "prior_appointments"] == 0, (
+            "counted an appointment whose outcome was not yet known at booking"
+        )
+        assert out.loc[702, "prior_noshows"] == 0
+        assert out.loc[702, "prior_noshow_rate"] == -1.0
+        # By Jan 15 exactly one appointment (Jan 10, missed) has completed.
+        assert out.loc[703, "prior_appointments"] == 1
+        assert out.loc[703, "prior_noshows"] == 1
+
+    def test_same_day_appointment_is_not_its_own_history(self):
+        """An appointment booked and held the same day has no history from itself."""
+        df = pd.DataFrame([
+            _make_row(8, 801, "2016-02-01", "2016-02-01", 1),
+            _make_row(8, 802, "2016-02-01", "2016-02-01", 0),
+        ])
+        out = add_patient_history_features(df).set_index("appointment_id")
+        assert out.loc[801, "prior_appointments"] == 0
+        assert out.loc[802, "prior_appointments"] == 0
+
+    def test_future_outcomes_never_affect_earlier_rows(self):
+        """Changing a later appointment's outcome must not alter earlier rows."""
+        rows = [
+            _make_row(9, 901, "2016-01-01", "2016-01-10", 0),
+            _make_row(9, 902, "2016-02-01", "2016-02-10", 0),
+            _make_row(9, 903, "2016-03-01", "2016-03-10", 0),
+        ]
+        base = add_patient_history_features(pd.DataFrame(rows)).set_index("appointment_id")
+
+        flipped_rows = [dict(r) for r in rows]
+        flipped_rows[2][TARGET] = 1          # the last appointment is now a no-show
+        flipped = add_patient_history_features(
+            pd.DataFrame(flipped_rows)
+        ).set_index("appointment_id")
+
+        for apt in (901, 902):
+            for col in ("prior_appointments", "prior_noshows", "prior_noshow_rate"):
+                assert base.loc[apt, col] == flipped.loc[apt, col], (
+                    f"{col} on {apt} changed when a LATER outcome changed — leakage"
+                )
 
 
 class TestCleaning:
