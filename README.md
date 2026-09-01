@@ -52,12 +52,12 @@ test set of 16,751 appointments.
 
 | Metric | Value |
 |---|---|
-| **F1 (no-show class)** | **0.453** |
-| Precision | 0.320 |
-| Recall | 0.776 |
-| PR-AUC | 0.374 |
-| ROC-AUC | 0.743 |
-| Decision threshold | 0.216 (tuned on validation) |
+| **F1 (no-show class)** | **0.449** |
+| Precision | 0.308 |
+| Recall | 0.825 |
+| PR-AUC | 0.373 |
+| ROC-AUC | 0.744 |
+| Decision threshold | 0.201 (tuned on validation) |
 
 Model progression — every model after the baseline had to beat Logistic Regression:
 
@@ -66,20 +66,20 @@ Model progression — every model after the baseline had to beat Logistic Regres
 | Majority-class baseline | 0.000 |
 | Logistic Regression | 0.449 |
 | Random Forest | 0.449 |
-| **XGBoost** | **0.452** |
+| **XGBoost** | **0.454** |
 
-The validation → test gap is **−0.000**, indicating the patient-grouped split held.
+The validation → test gap is **+0.005**, indicating the patient-grouped split held.
 
 ### What this means operationally
 
 | Risk tier | Share of appointments | Actual no-show rate |
 |---|---|---|
-| Low | 59.5% | 10.8% |
-| Medium | 26.6% | 29.5% |
-| **High** | **13.9%** | **41.7%** |
+| Low | 59.3% | 10.6% |
+| Medium | 30.1% | 30.6% |
+| **High** | **10.7%** | **43.3%** |
 
-High-risk patients miss **3.9× more often** than low-risk ones. Calling the top
-14% of appointments reaches 29% of all no-shows.
+High-risk patients miss **4.1× more often** than low-risk ones. Calling the top
+11% of appointments reaches 23% of all no-shows.
 
 **On the modest F1:** no feature correlates above 0.28 with the target, so this is
 close to the ceiling for this dataset. The model is useful for *ranking* who to
@@ -99,13 +99,27 @@ Place `KaggleV2-May-2016.csv` in `data/` (not committed — see `.gitignore`), t
 ```bash
 python -m src.preprocessing       # clean, engineer features, split
 python -m src.visualize           # EDA figures        -> reports/figures/
+python -m src.tune                # hyperparameter search (optional, slow)
 python -m src.train               # train, log to MLflow, save model
 python -m src.evaluation_plots    # result figures     -> reports/figures/
-python -m src.predict             # inference demo
-pytest                            # 63 tests
+python -m src.error_analysis      # error slices       -> reports/figures/
+pytest                            # 66 tests
 ```
 
-View experiments: `mlflow ui --backend-store-uri sqlite:///mlflow.db`
+Then run the demo:
+
+```bash
+python run_demo.py                # demo page + API on http://localhost:8000
+```
+
+**Experiment record.** Runs are logged to a local SQLite MLflow store. The
+database itself is not committed (binary, and rewritten on every run), but every
+run is exported to [`reports/experiments.csv`](reports/experiments.csv) — see
+[Experiments](#experiments) below. To browse them interactively after training:
+
+```bash
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
 
 ## API
 
@@ -129,12 +143,12 @@ curl -X POST http://localhost:8000/predict \
 
 ```json
 {
-  "no_show_probability": 0.4431,
-  "no_show_percentage": 44.3,
+  "no_show_probability": 0.4233,
+  "no_show_percentage": 42.3,
   "risk_tier": "High",
   "recommendation": "Call to confirm — highest priority for staff follow-up.",
   "lead_time_days": 28,
-  "threshold_used": 0.2165,
+  "threshold_used": 0.2011,
   "model": "xgboost"
 }
 ```
@@ -208,12 +222,12 @@ transformations applied at inference are exactly those fitted during training.
 
 ```json
 {
-  "no_show_probability": 0.4431,
-  "no_show_percentage": 44.3,
+  "no_show_probability": 0.4233,
+  "no_show_percentage": 42.3,
   "risk_tier": "High",
   "recommendation": "Call to confirm — highest priority for staff follow-up.",
   "lead_time_days": 28,
-  "threshold_used": 0.2165,
+  "threshold_used": 0.2011,
   "model": "xgboost"
 }
 ```
@@ -230,11 +244,13 @@ src/
   predict.py            # inference: probability + risk tier
   visualize.py          # pre-modelling EDA figures
   api.py                # FastAPI service
-tests/                  # 63 tests, focused on the leakage guarantees
+tests/                  # 66 tests, focused on the leakage guarantees
 notebooks/demo.ipynb    # Colab-runnable demo
-reports/figures/        # 13 figures
+reports/figures/        # 15 figures
+reports/experiments.csv # every MLflow run, exported
 models/                 # saved artifacts (not committed)
-scripts/                # Docker smoke test
+run_demo.py             # one-command local demo
+scripts/                # demo page, Docker smoke test
 Dockerfile              # API image (code only; data/models mounted)
 docker-compose.yml      # serve, or run a one-shot training job
 ```
@@ -263,13 +279,13 @@ is prevented:
 **Metric choice** — classes are ~20/80, so accuracy is misleading: always
 predicting "attended" scores 79.8% while catching zero no-shows. Primary metric
 is **F1 on the no-show class**, with PR-AUC, ROC-AUC and a confusion matrix
-reported alongside. The decision threshold is tuned on validation (0.216), not
-assumed at 0.5 — at the default it would score F1 0.070.
+reported alongside. The decision threshold is tuned on validation (0.201), not
+assumed at 0.5 — at the default it would score F1 0.073.
 
 **Calibration** — `scale_pos_weight` corrects the imbalance but inflates
-probabilities (mean 0.433 against a true rate of 0.202). Since the deliverable
+probabilities (mean 0.436 against a true rate of 0.202). Since the deliverable
 shows staff a percentage, isotonic calibration is fitted on validation: mean
-predicted becomes 0.202 and Brier improves from 0.208 to 0.142, with F1 unchanged.
+predicted becomes 0.202 and Brier improves from 0.209 to 0.142, with F1 unchanged.
 
 **Data cleaning** — 11 rows removed from 110,527:
 - 5 where `ScheduledDay` fell after `AppointmentDay`
@@ -278,6 +294,36 @@ predicted becomes 0.202 and Brier improves from 0.208 to 0.142, with F1 unchange
 Dates are compared as **calendar dates**, not timestamps: an appointment booked
 at 18:00 for that same day is legitimate, and a naive timestamp comparison would
 discard ~38,000 valid same-day rows.
+
+## Experiments
+
+Every run is logged to a local MLflow store (`mlflow.db`, gitignored because it
+is a binary rewritten on each run) and exported to
+[`reports/experiments.csv`](reports/experiments.csv) so the record is readable
+and diffable from the repository alone.
+
+**Hyperparameter search** — `python -m src.tune` runs a 40-trial
+`RandomizedSearchCV` over eight XGBoost parameters, scored by F1 on the no-show
+class with `GroupKFold(4)` on `PatientId`, so no patient spans a fold boundary.
+The search runs on train+validation only; the test set is never touched by it.
+
+| | n_estimators | max_depth | learning_rate | subsample | colsample | CV F1 |
+|---|---|---|---|---|---|---|
+| Hand-picked | 400 | 5 | 0.05 | 0.90 | 0.90 | — |
+| **Searched** | **264** | **7** | **0.026** | **0.77** | **0.99** | **0.4548** |
+
+Head-to-head on validation, refitted identically: searched **0.4538** vs
+hand-picked 0.4522. The search wins, but by +0.0016 — worth reporting honestly
+rather than overselling. `src/train.py` loads `models/best_params.json` when it
+exists and falls back to the hand-picked values otherwise, so the pipeline runs
+either way.
+
+**A note on validation vs test.** The searched configuration scores *higher* on
+validation and marginally *lower* on test (0.4490) than the hand-picked one
+would have (0.4528). Model selection is only allowed to see validation, so the
+searched configuration is the one that ships; switching back after seeing the
+test score would be exactly the kind of test-set leakage this project is
+otherwise careful to avoid. The val→test gap of +0.005 is reported as-is.
 
 ## Key findings
 
@@ -297,29 +343,29 @@ discard ~38,000 valid same-day rows.
 Aggregate F1 hides *which* appointments the model gets wrong. Slicing the 16,751
 test appointments by error type gives four findings:
 
-**1. Same-day appointments are the blind spot.** Recall collapses to 17.0% there
-against 93.3% at 31+ days:
+**1. Same-day appointments are the blind spot.** Recall collapses to 15.2% there
+against 96.9% at 31+ days:
 
 | Lead time | n | Actual rate | Recall | Precision |
 |---|---|---|---|---|
-| Same day | 5,950 | 4.7% | **17.0%** | 35.8% |
-| 1–3 | 2,112 | 23.5% | 62.3% | 27.0% |
-| 4–7 | 2,606 | 25.9% | 74.4% | 29.6% |
-| 8–14 | 1,800 | 30.3% | 90.3% | 32.7% |
-| 15–30 | 2,667 | 31.8% | 91.4% | 33.8% |
-| 31+ | 1,616 | 32.1% | **93.3%** | 34.9% |
+| Same day | 5,950 | 4.7% | **15.2%** | 33.1% |
+| 1–3 | 2,112 | 23.5% | 71.4% | 25.9% |
+| 4–7 | 2,606 | 25.9% | 81.5% | 28.4% |
+| 8–14 | 1,800 | 30.3% | 94.1% | 31.4% |
+| 15–30 | 2,667 | 31.8% | 96.0% | 33.3% |
+| 31+ | 1,616 | 32.1% | **96.9%** | 33.7% |
 
 This is the model behaving correctly, not a bug: same-day appointments genuinely
 miss only 4.7% of the time, so the calibrated probability rarely clears the
 threshold. It matters operationally because same-day bookings are 36% of all
 appointments — the call list will systematically under-cover them.
 
-**2. Most errors are borderline, not confident blunders.** 64.4% of false
-negatives fall within 0.05 of the 0.216 threshold. The model is uncertain where
+**2. Most errors are borderline, not confident blunders.** 66.7% of false
+negatives fall within 0.05 of the 0.201 threshold. The model is uncertain where
 it is wrong, which is the desired failure mode — it is not confidently wrong.
 
-**3. Errors track the base rate by age.** Recall is 44.3% for seniors (14.5%
-actual no-show rate) and 90.6% for teens (26.2%). The model is weakest exactly
+**3. Errors track the base rate by age.** Recall is 55.9% for seniors (14.5%
+actual no-show rate) and 89.7% for teens (26.2%). The model is weakest exactly
 where no-shows are rarest, which follows from a single global threshold.
 
 **4. Fairness — the welfare subgroup is flagged more often.** This is the finding
@@ -327,11 +373,11 @@ that most constrains deployment:
 
 | Group | n | Actual rate | Flagged | Recall | Precision |
 |---|---|---|---|---|---|
-| No welfare | 15,080 | 19.6% | 47.7% | 76.4% | 31.5% |
-| Scholarship (welfare) | 1,671 | 24.1% | **57.8%** | 86.1% | 35.8% |
+| No welfare | 15,080 | 19.6% | 53.1% | 81.7% | 30.2% |
+| Scholarship (welfare) | 1,671 | 24.1% | **59.7%** | 88.6% | 35.7% |
 
-Welfare recipients are flagged at 57.8% versus 47.7% — a **10-point gap**.
-Precision is comparable across groups (35.8% vs 31.5%), so the model is not
+Welfare recipients are flagged at 59.7% versus 53.1% — a **6.6-point gap**.
+Precision is comparable across groups (35.7% vs 30.2%), so the model is not
 *less accurate* for this group; it flags them more because they genuinely miss
 more (24.1% vs 19.6%). The disparity is in exposure, not in error rate.
 
@@ -346,7 +392,7 @@ in a healthcare setting. The limitations below are therefore part of the
 deliverable, not a footnote to it.
 
 1. **One city, one year** (Vitória, 2016). Generalization elsewhere is untested.
-2. **Modest discrimination** — F1 0.453, ROC-AUC 0.743. Useful for ranking, not
+2. **Modest discrimination** — F1 0.449, ROC-AUC 0.744. Useful for ranking, not
    for confident individual predictions.
 3. **Precision ~34%** — about two in three flagged patients would have attended.
    Acceptable when the action is a phone call; not for anything punitive.

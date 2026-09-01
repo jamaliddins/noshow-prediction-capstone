@@ -1,6 +1,8 @@
 # Data
 data/
 *.csv
+# ...but the exported experiment record is a deliverable, not data.
+!reports/experiments.csv
 
 # Course material and private notes — never published
 *.pdf

@@ -65,8 +65,33 @@ def build_preprocessor(numeric: list[str], categorical: list[str]) -> ColumnTran
     )
 
 
+# Written by src/tune.py. Loaded when present so the shipped model uses the
+# searched configuration rather than hand-picked guesses.
+BEST_PARAMS_PATH = MODELS_DIR / "best_params.json"
+
+
+def load_tuned_xgb_params() -> dict:
+    """Searched XGBoost params, or {} if no search has been run."""
+    if not BEST_PARAMS_PATH.exists():
+        return {}
+    payload = json.loads(BEST_PARAMS_PATH.read_text(encoding="utf-8"))
+    params = payload.get("best_params", {})
+    # n_estimators / max_depth must be ints; JSON may widen them to float.
+    for key in ("n_estimators", "max_depth", "min_child_weight"):
+        if key in params:
+            params[key] = int(params[key])
+    return params
+
+
 def get_models(scale_pos_weight: float) -> dict[str, object]:
     """Candidate estimators, each handling imbalance in its own idiom."""
+    # Fall back to the hand-picked values if src/tune.py has not been run.
+    xgb_params = {
+        "n_estimators": 400, "max_depth": 5, "learning_rate": 0.05,
+        "subsample": 0.9, "colsample_bytree": 0.9,
+    }
+    xgb_params.update(load_tuned_xgb_params())
+
     return {
         "majority_baseline": DummyClassifier(strategy="most_frequent"),
         "logistic_regression": LogisticRegression(
@@ -77,8 +102,7 @@ def get_models(scale_pos_weight: float) -> dict[str, object]:
             class_weight="balanced", n_jobs=-1, random_state=RANDOM_STATE,
         ),
         "xgboost": XGBClassifier(
-            n_estimators=400, max_depth=5, learning_rate=0.05,
-            subsample=0.9, colsample_bytree=0.9,
+            **xgb_params,
             scale_pos_weight=scale_pos_weight,
             eval_metric="logloss", n_jobs=-1, random_state=RANDOM_STATE,
         ),

@@ -1,0 +1,16 @@
+{
+  "best_params": {
+    "colsample_bytree": 0.9861021229056552,
+    "gamma": 3.0351712384334233,
+    "learning_rate": 0.025567264128934574,
+    "max_depth": 7,
+    "min_child_weight": 15,
+    "n_estimators": 264,
+    "reg_lambda": 0.1074664278936508,
+    "subsample": 0.7693605922825478
+  },
+  "best_cv_f1": 0.4548079397321456,
+  "n_trials": 40,
+  "cv": "GroupKFold(4) on patient_id",
+  "scoring": "f1 (no-show class)"
+}
