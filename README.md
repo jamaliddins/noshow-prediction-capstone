@@ -12,6 +12,39 @@ Santo, Brazil, 2016).
 This is a **prototype decision-support tool** for clinic operations staff to
 prioritize reminder and confirmation calls. It is not a clinical or punitive system.
 
+## Dataset sample
+
+The first 10 rows of the raw Kaggle CSV, unmodified. The dataset itself is not
+committed (see [Quickstart](#quickstart) for the download step) - this is here so
+the schema is readable without obtaining the file.
+
+| PatientId | ApptID | Gen | ScheduledDay | ApptDay | Age | Neighbourhood | Schol | Hiper | Diab | Alco | Handcap | SMS | No-show |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 29872499824296 | 5642903 | F | 2016-04-29 18:38:08 | 2016-04-29 | 62 | JARDIM DA PENHA | 0 | 1 | 0 | 0 | 0 | 0 | No |
+| 558997776694438 | 5642503 | M | 2016-04-29 16:08:27 | 2016-04-29 | 56 | JARDIM DA PENHA | 0 | 0 | 0 | 0 | 0 | 0 | No |
+| 4262962299951 | 5642549 | F | 2016-04-29 16:19:04 | 2016-04-29 | 62 | MATA DA PRAIA | 0 | 0 | 0 | 0 | 0 | 0 | No |
+| 867951213174 | 5642828 | F | 2016-04-29 17:29:31 | 2016-04-29 | 8 | PONTAL DE CAMBURI | 0 | 0 | 0 | 0 | 0 | 0 | No |
+| 8841186448183 | 5642494 | F | 2016-04-29 16:07:23 | 2016-04-29 | 56 | JARDIM DA PENHA | 0 | 1 | 1 | 0 | 0 | 0 | No |
+| 95985133231274 | 5626772 | F | 2016-04-27 08:36:51 | 2016-04-29 | 76 | REPÚBLICA | 0 | 1 | 0 | 0 | 0 | 0 | No |
+| 733688164476661 | 5630279 | F | 2016-04-27 15:05:12 | 2016-04-29 | 23 | GOIABEIRAS | 0 | 0 | 0 | 0 | 0 | 0 | Yes |
+| 3449833394123 | 5630575 | F | 2016-04-27 15:39:58 | 2016-04-29 | 39 | GOIABEIRAS | 0 | 0 | 0 | 0 | 0 | 0 | Yes |
+| 56394729949972 | 5638447 | F | 2016-04-29 08:02:16 | 2016-04-29 | 21 | ANDORINHAS | 0 | 0 | 0 | 0 | 0 | 0 | No |
+| 78124564369297 | 5629123 | F | 2016-04-27 12:48:25 | 2016-04-29 | 19 | CONQUISTA | 0 | 0 | 0 | 0 | 0 | 0 | No |
+
+Notes on the raw schema, all handled in `src/preprocessing.py`:
+
+- **`No-show` is inverted.** `Yes` means the patient *did not* attend, so it becomes
+  the positive class (`1`). Rows 7 and 8 above are the missed appointments.
+- **Three headers are misspelled** in the source: `Hipertension`, `Handcap`, and the
+  hyphenated `No-show`. All are renamed on load.
+- **`Handcap` is a 0-4 count, not a flag** - it is kept as both the raw count and a
+  binary `has_handicap`.
+- **`ScheduledDay` carries a timestamp, `AppointmentDay` does not** (always
+  `00:00:00`). Dates are therefore compared as calendar dates, so a same-day booking
+  at 18:00 is legitimate rather than a data error.
+- **`PatientId` repeats** - 62,299 patients across 110,527 appointments, which is
+  why the split is grouped by patient rather than random.
+
 ## Results
 
 Selected model: **XGBoost with isotonic calibration**, scored once on a held-out
